@@ -40,6 +40,43 @@ class MyNetaScraper:
         except:
             return 0
 
+    def parse_stock_details(self, description, total_amount):
+        """
+        Tries to parse company name, quantity, and rate from description.
+        Example: "3I Infotech Ltd Q. 200, Rate.40.05"
+        """
+        try:
+            # Regex to find Quantity (Q. or Qty) and Rate
+            q_match = re.search(r'Q(?:ty)?\.?\s*([\d,.]+)', description, re.IGNORECASE)
+            r_match = re.search(r'Rate\.?\s*([\d,.]+)', description, re.IGNORECASE)
+            
+            quantity = float(q_match.group(1).replace(',', '')) if q_match else None
+            rate = float(r_match.group(1).replace(',', '')) if r_match else None
+            
+            # Company name is usually everything before 'Q.'
+            company_name = description
+            if q_match:
+                company_name = description[:q_match.start()].strip()
+            elif r_match:
+                company_name = description[:r_match.start()].strip()
+                
+            # Clean up company name
+            company_name = re.sub(r'^[ivx.]+\s*', '', company_name).strip()
+            
+            return {
+                'company_name': company_name,
+                'quantity': quantity,
+                'rate': rate,
+                'total_value': total_amount
+            }
+        except:
+            return {
+                'company_name': description,
+                'quantity': None,
+                'rate': None,
+                'total_value': total_amount
+            }
+
     def get_all_candidate_urls(self):
         print("Fetching all candidate URLs...")
         all_candidate_urls = set()
@@ -115,62 +152,70 @@ class MyNetaScraper:
                 table_div = movable_assets_header.find_parent('div').find_next_sibling('div')
                 table = table_div.find('table')
                 if table:
-                    # We need to track the current category because of rowspans
+                    # Track current category for rowspan rows
                     current_category = ""
-                    for tr in table.find_all('tr')[1:]: # Skip header
+                    for tr in table.find_all('tr')[1:]:
                         tds = tr.find_all('td')
                         if not tds or len(tds) < 2: continue
                         
-                        # Handle rowspans for categories (i, ii, iii, iv...)
+                        # Detect category and identify columns
                         if tds[0].has_attr('rowspan'):
                             current_category = tds[1].get_text(strip=True)
                             description_td = tds[1]
                             self_td = tds[2] if len(tds) > 2 else None
-                        elif len(tds) >= 8: # Normal row
+                        elif len(tds) >= 8:
                             current_category = tds[1].get_text(strip=True)
                             description_td = tds[1]
                             self_td = tds[2]
-                        else: # Row inside a rowspan
+                        else:
                             description_td = tds[0]
                             self_td = tds[1] if len(tds) > 1 else None
 
                         if not self_td: continue
                         
-                        type_name = description_td.get_text(strip=True)
-                        if any(x in type_name for x in ['Total', 'Gross', 'Calculated']):
+                        type_label = description_td.get_text(strip=True)
+                        if any(x in type_label for x in ['Total', 'Gross', 'Calculated']):
                             continue
 
-                        # Extract sub-investments from the self_td
-                        content_str = str(self_td)
-                        # Normalize br tags
-                        content_str = content_str.replace('<br/>', '<br>').replace('<br >', '<br>')
-                        parts = content_str.split('<br>')
+                        # Extract sub-investments by splitting on <br><br>
+                        cell_html = str(self_td)
+                        # Standardize br tags for easier splitting
+                        cell_html = re.sub(r'<br\s*/?>', '<br>', cell_html)
+                        item_blocks = cell_html.split('<br><br>')
                         
-                        for part in parts:
-                            part_soup = BeautifulSoup(part, 'html.parser')
+                        for block in item_blocks:
+                            if not block.strip(): continue
+                            block_soup = BeautifulSoup(block, 'html.parser')
                             
-                            # Ignore if it's just 'Nil' or empty
-                            text_content = part_soup.get_text(strip=True)
-                            if not text_content or text_content.lower() == 'nil' or len(text_content) < 2:
+                            # Extract description from span.desc if it exists
+                            desc_span = block_soup.find('span', class_='desc')
+                            item_description = desc_span.get_text(strip=True) if desc_span else type_label
+                            
+                            # To get the amount, we remove all span tags
+                            for s in block_soup.find_all('span'):
+                                s.decompose()
+                            
+                            amount_text = block_soup.get_text(strip=True)
+                            if amount_text.lower() == 'nil' or not amount_text:
                                 continue
-                            
-                            # The description for this specific item
-                            item_desc_span = part_soup.find('span', class_='desc')
-                            item_desc = item_desc_span.get_text(strip=True) if item_desc_span else type_name
-                            
-                            # Remove all spans from part_soup to get only the amount text
-                            for span in part_soup.find_all('span'):
-                                span.decompose()
-                            
-                            amount_text = part_soup.get_text(strip=True)
+                                
                             amount = self.clean_amount(amount_text)
-                            
                             if amount > 0:
-                                investments.append({
-                                    'type': current_category if current_category else type_name,
-                                    'description': item_desc,
+                                inv_type = current_category if current_category else type_label
+                                # Clean up type (remove indices like i, ii, (a), (b))
+                                inv_type = re.sub(r'^[ivx\(\)a-z.]+\s*', '', inv_type).strip()
+                                
+                                inv_item = {
+                                    'type': inv_type,
+                                    'description': item_description,
                                     'amount': amount
-                                })
+                                }
+                                
+                                # Stock specific parsing
+                                if any(x in inv_type for x in ['Shares', 'Bonds', 'Debentures']):
+                                    inv_item['stock_details'] = self.parse_stock_details(item_description, amount)
+                                
+                                investments.append(inv_item)
             
             return {
                 'name': name, 'party': party, 'constituency': constituency.strip(), 'state': state.strip(),
@@ -201,11 +246,17 @@ class MyNetaScraper:
                 
             politician_id = upsert_res.data[0]['id']
 
-            # If politician existed, clear old investments before inserting new ones
+            # If politician existed, clear old investments and stocks before inserting new ones
             self.supabase.table('investments').delete().eq('politician_id', politician_id).execute()
+            
+            try:
+                self.supabase.table('stocks').delete().eq('politician_id', politician_id).execute()
+            except:
+                print("Note: 'stocks' table not found in Supabase. Skipping stock-specific storage.")
 
             if data['investments']:
                 inv_list = []
+                stock_list = []
                 for inv in data['investments']:
                     inv_list.append({
                         'politician_id': politician_id,
@@ -213,7 +264,26 @@ class MyNetaScraper:
                         'description': inv['description'],
                         'amount': inv['amount']
                     })
-                self.supabase.table('investments').insert(inv_list).execute()
+                    
+                    if 'stock_details' in inv:
+                        s = inv['stock_details']
+                        stock_list.append({
+                            'politician_id': politician_id,
+                            'company_name': s['company_name'],
+                            'quantity': s['quantity'],
+                            'rate': s['rate'],
+                            'total_value': s['total_value']
+                        })
+                
+                if inv_list:
+                    self.supabase.table('investments').insert(inv_list).execute()
+                
+                if stock_list:
+                    try:
+                        self.supabase.table('stocks').insert(stock_list).execute()
+                        print(f"Successfully saved {len(stock_list)} stocks.")
+                    except Exception as e:
+                        print(f"Could not save stocks to table: {e}")
             
             print(f"Successfully saved {data['name']} to Supabase.")
         except Exception as e:

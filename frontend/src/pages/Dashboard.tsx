@@ -3,9 +3,10 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import PoliticianCard from '../components/PoliticianCard';
 import InvestmentsTable from '../components/InvestmentsTable';
+import StocksTable from '../components/StocksTable';
 import AssetChart from '../components/AssetChart';
 import ThemeToggle from '../components/ThemeToggle';
-import { Search, X, TrendingUp, Landmark, ShieldCheck } from 'lucide-react';
+import { Search, X, TrendingUp, Landmark, ShieldCheck, PieChart as PieChartIcon, LayoutList } from 'lucide-react';
 
 interface Politician {
   id: string;
@@ -15,6 +16,7 @@ interface Politician {
   state: string;
   total_assets: number;
   investments: any[];
+  stocks?: any[];
 }
 
 const Dashboard: React.FC = () => {
@@ -24,6 +26,7 @@ const Dashboard: React.FC = () => {
   const [search, setSearch] = useState('');
   const [selectedPolitician, setSelectedPolitician] = useState<Politician | null>(null);
   const [fetchingDetails, setFetchingDetails] = useState(false);
+  const [activeTab, setActiveTab] = useState<'general' | 'stocks'>('general');
 
   useEffect(() => {
     fetchPoliticians();
@@ -209,14 +212,52 @@ const Dashboard: React.FC = () => {
               {/* Detailed Investments */}
               <div className="lg:col-span-2">
                 <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-                  <div className="p-8 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                      Investment Deep Dive
-                    </h3>
+                  <div className="px-8 pt-8 border-b border-gray-100 dark:border-gray-700">
+                    <div className="flex justify-between items-center mb-6">
+                      <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                        Portfolio Details
+                      </h3>
+                    </div>
+                    
+                    {/* Tabs */}
+                    <div className="flex space-x-8">
+                      <button
+                        onClick={() => setActiveTab('general')}
+                        className={`pb-4 text-sm font-bold tracking-widest uppercase transition-colors relative ${
+                          activeTab === 'general' 
+                            ? 'text-indigo-600 dark:text-indigo-400' 
+                            : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+                        }`}
+                      >
+                        General Investments
+                        {activeTab === 'general' && (
+                          <div className="absolute bottom-0 left-0 right-0 h-1 bg-indigo-600 dark:bg-indigo-400 rounded-t-full" />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => setActiveTab('stocks')}
+                        className={`pb-4 text-sm font-bold tracking-widest uppercase transition-colors relative ${
+                          activeTab === 'stocks' 
+                            ? 'text-indigo-600 dark:text-indigo-400' 
+                            : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+                        }`}
+                      >
+                        Equity Portfolio
+                        {activeTab === 'stocks' && (
+                          <div className="absolute bottom-0 left-0 right-0 h-1 bg-indigo-600 dark:bg-indigo-400 rounded-t-full" />
+                        )}
+                      </button>
+                    </div>
                   </div>
+
                   <div className="p-0">
-                    <InvestmentsTable investments={selectedPolitician.investments} />
+                    {activeTab === 'general' ? (
+                      <InvestmentsTable investments={selectedPolitician.investments} />
+                    ) : (
+                      <StocksTable stocks={selectedPolitician.stocks || []} />
+                    )}
                   </div>
+                  
                   <div className="p-8 bg-gray-50 dark:bg-gray-900/50 text-xs text-gray-500 dark:text-gray-400">
                     * Data extracted from official election nomination papers. Values shown are at the time of filing.
                   </div>

@@ -35,6 +35,11 @@ def get_politician(id):
             # Get associated investments
             inv_res = supabase.table('investments').select('*').eq('politician_id', id).execute()
             politician['investments'] = inv_res.data
+            
+            # Get associated stocks
+            stock_res = supabase.table('stocks').select('*').eq('politician_id', id).execute()
+            politician['stocks'] = stock_res.data
+            
             return jsonify(politician)
         
         return jsonify({"error": "Politician not found"}), 404
