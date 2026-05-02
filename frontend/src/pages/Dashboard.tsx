@@ -6,7 +6,7 @@ import InvestmentsTable from '../components/InvestmentsTable';
 import StocksTable from '../components/StocksTable';
 import AssetChart from '../components/AssetChart';
 import ThemeToggle from '../components/ThemeToggle';
-import { Search, X, TrendingUp, Landmark, ShieldCheck, PieChart as PieChartIcon, LayoutList } from 'lucide-react';
+import { Search, X, Crown, Landmark, ShieldCheck, PieChart as PieChartIcon, LayoutList } from 'lucide-react';
 
 interface Politician {
   id: string;
@@ -72,7 +72,7 @@ const Dashboard: React.FC = () => {
               className="flex-shrink-0 flex items-center cursor-pointer hover:opacity-80 transition-opacity"
               onClick={() => setSelectedPolitician(null)}
             >
-              <TrendingUp className="h-6 w-6 text-indigo-600 dark:text-indigo-400 mr-2" />
+              <Crown className="h-6 w-6 text-indigo-600 dark:text-indigo-400 mr-2" />
               <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-indigo-400 dark:to-violet-400">
                 Netaji
               </h1>
