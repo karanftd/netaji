@@ -12,15 +12,29 @@ def get_politicians():
     query = request.args.get('q', '').lower()
     
     try:
+        # We only want politicians who have at least one entry in the stocks table.
+        # Supabase/Postgrest handles this well with inner joins or filtering by associated table existence.
+        # Here we select politicians and filter where stocks is not empty.
+        
+        # 'stocks!inner(id)' does an inner join, effectively filtering out 
+        # politicians without any matching rows in stocks.
+        select_query = "*, stocks!inner(id)"
+        
         if query:
             # Search by name, party, or state
-            res = supabase.table('politicians').select('*').or_(
+            res = supabase.table('politicians').select(select_query).or_(
                 f"name.ilike.%{query}%,party.ilike.%{query}%,state.ilike.%{query}%"
             ).execute()
         else:
-            res = supabase.table('politicians').select('*').limit(20).execute()
+            res = supabase.table('politicians').select(select_query).limit(20).execute()
         
-        return jsonify(res.data)
+        # We clean the response to remove the nested stock IDs used for filtering
+        cleaned_data = []
+        for p in res.data:
+            p.pop('stocks', None)
+            cleaned_data.append(p)
+            
+        return jsonify(cleaned_data)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
