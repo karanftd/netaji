@@ -26,7 +26,7 @@ const Dashboard: React.FC = () => {
   const [search, setSearch] = useState('');
   const [selectedPolitician, setSelectedPolitician] = useState<Politician | null>(null);
   const [fetchingDetails, setFetchingDetails] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'stocks'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'stocks'>('stocks');
 
   useEffect(() => {
     fetchPoliticians();
@@ -234,19 +234,6 @@ const Dashboard: React.FC = () => {
                     {/* Tabs */}
                     <div className="flex space-x-8">
                       <button
-                        onClick={() => setActiveTab('general')}
-                        className={`pb-4 text-sm font-bold tracking-widest uppercase transition-colors relative ${
-                          activeTab === 'general' 
-                            ? 'text-indigo-600 dark:text-indigo-400' 
-                            : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
-                        }`}
-                      >
-                        General Investments
-                        {activeTab === 'general' && (
-                          <div className="absolute bottom-0 left-0 right-0 h-1 bg-indigo-600 dark:bg-indigo-400 rounded-t-full" />
-                        )}
-                      </button>
-                      <button
                         onClick={() => setActiveTab('stocks')}
                         className={`pb-4 text-sm font-bold tracking-widest uppercase transition-colors relative ${
                           activeTab === 'stocks' 
@@ -256,6 +243,19 @@ const Dashboard: React.FC = () => {
                       >
                         Equity Portfolio
                         {activeTab === 'stocks' && (
+                          <div className="absolute bottom-0 left-0 right-0 h-1 bg-indigo-600 dark:bg-indigo-400 rounded-t-full" />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => setActiveTab('general')}
+                        className={`pb-4 text-sm font-bold tracking-widest uppercase transition-colors relative ${
+                          activeTab === 'general' 
+                            ? 'text-indigo-600 dark:text-indigo-400' 
+                            : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+                        }`}
+                      >
+                        General Investments
+                        {activeTab === 'general' && (
                           <div className="absolute bottom-0 left-0 right-0 h-1 bg-indigo-600 dark:bg-indigo-400 rounded-t-full" />
                         )}
                       </button>
