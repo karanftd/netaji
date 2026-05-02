@@ -60,5 +60,44 @@ def get_politician(id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/analytics/richest', methods=['GET'])
+def get_richest_politicians():
+    try:
+        res = supabase.table('politicians').select('name, party, total_assets').order('total_assets', desc=True).limit(10).execute()
+        return jsonify(res.data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/analytics/party-wealth', methods=['GET'])
+def get_party_wealth():
+    try:
+        # This is better done with a raw RPC or complex query, but we'll aggregate in Python for simplicity
+        res = supabase.table('politicians').select('party, total_assets').execute()
+        wealth_map = {}
+        for p in res.data:
+            party = p['party'] or 'Unknown'
+            wealth_map[party] = wealth_map.get(party, 0) + float(p['total_assets'] or 0)
+        
+        # Sort and return as list of dicts
+        sorted_wealth = sorted([{"party": k, "total_assets": v} for k, v in wealth_map.items()], key=lambda x: x['total_assets'], reverse=True)
+        return jsonify(sorted_wealth[:10])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/analytics/popular-stocks', methods=['GET'])
+def get_popular_stocks():
+    try:
+        # Aggregate stocks by company name
+        res = supabase.table('stocks').select('company_name').execute()
+        stock_counts = {}
+        for s in res.data:
+            name = s['company_name']
+            stock_counts[name] = stock_counts.get(name, 0) + 1
+            
+        sorted_stocks = sorted([{"company": k, "count": v} for k, v in stock_counts.items()], key=lambda x: x['count'], reverse=True)
+        return jsonify(sorted_stocks[:15])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

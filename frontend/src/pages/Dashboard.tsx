@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import PoliticianCard from '../components/PoliticianCard';
@@ -6,7 +7,7 @@ import InvestmentsTable from '../components/InvestmentsTable';
 import StocksTable from '../components/StocksTable';
 import AssetChart from '../components/AssetChart';
 import ThemeToggle from '../components/ThemeToggle';
-import { Search, X, Armchair, Landmark, ShieldCheck } from 'lucide-react';
+import { Search, X, Armchair, Landmark, ShieldCheck, PieChart as PieIcon } from 'lucide-react';
 
 interface Politician {
   id: string;
@@ -78,6 +79,13 @@ const Dashboard: React.FC = () => {
               </h1>
             </div>
             <div className="flex items-center space-x-6">
+              <Link 
+                to="/analytics" 
+                className="flex items-center text-sm font-bold text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400 transition-colors uppercase tracking-widest"
+              >
+                <PieIcon className="h-4 w-4 mr-2" />
+                Analytics
+              </Link>
               <ThemeToggle />
               <div className="hidden sm:flex items-center space-x-2">
                 <img 

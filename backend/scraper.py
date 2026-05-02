@@ -77,39 +77,48 @@ class MyNetaScraper:
                 'total_value': total_amount
             }
 
-    def get_all_candidate_urls(self):
-        print("Fetching all candidate URLs...")
+    def get_all_candidate_urls(self, max_pages=5):
+        print(f"Fetching candidate URLs from Analyzed summary (up to {max_pages} pages)...")
         all_candidate_urls = set()
-        main_page_url = f"{self.base_url}index.php?action=show"
-        self.driver.get(main_page_url)
-        try:
-            WebDriverWait(self.driver, 10).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "table.w3-table"))
-            )
-            soup = BeautifulSoup(self.driver.page_source, 'html.parser')
-            main_table = None
-            all_tables = soup.find_all('table')
-            for table in all_tables:
-                table_text = table.text
-                if 'Candidate' in table_text and 'Party' in table_text and 'Criminal Cases' in table_text:
-                    main_table = table
+        
+        for page in range(1, max_pages + 1):
+            print(f"  Fetching page {page}...")
+            # MyNeta pagination often uses &page=X
+            summary_page_url = f"{self.base_url}index.php?action=summary&sub_action=candidates_analyzed&page={page}"
+            self.driver.get(summary_page_url)
+            try:
+                time.sleep(3)
+                soup = BeautifulSoup(self.driver.page_source, 'html.parser')
+                
+                # Find all links
+                links = soup.find_all('a', href=True)
+                page_links_count = 0
+                for link in links:
+                    href = link['href']
+                    if 'candidate.php?candidate_id=' in href:
+                        # Extract the query part
+                        query_part = href.split('candidate.php')[1]
+                        full_url = f"{self.base_url}candidate.php{query_part}"
+                        if full_url not in all_candidate_urls:
+                            all_candidate_urls.add(full_url)
+                            page_links_count += 1
+                
+                if page_links_count == 0:
+                    print("  No more candidates found on this page. Stopping.")
                     break
-            if not main_table:
-                return []
-            
-            candidate_rows = main_table.find_all('tr')[1:]
-            for row in candidate_rows:
-                cols = row.find_all('td')
-                if len(cols) > 1:
-                    link_tag = cols[1].find('a')
-                    if link_tag and 'href' in link_tag.attrs:
-                        candidate_profile_url = f"{self.base_url}{link_tag['href']}"
-                        all_candidate_urls.add(candidate_profile_url)
-        except Exception as e:
-            print(f"Error fetching all candidate URLs: {e}")
+                    
+            except Exception as e:
+                print(f"Error fetching candidate URLs on page {page}: {e}")
         
         print(f"Found {len(all_candidate_urls)} unique candidate URLs.")
         return list(all_candidate_urls)
+
+    def is_already_scraped(self, url):
+        try:
+            res = self.supabase.table('politicians').select('id').eq('source_url', url).execute()
+            return len(res.data) > 0
+        except:
+            return False
 
     def scrape_candidate(self, url):
         print(f"Scraping {url}...")
@@ -296,27 +305,45 @@ class MyNetaScraper:
 if __name__ == '__main__':
     scraper = MyNetaScraper()
     try:
-        # Fetch candidate URLs from the main list page
-        candidate_urls = scraper.get_all_candidate_urls()
+        # 167 total pages for Lok Sabha 2024
+        TOTAL_PAGES = 167
+        print(f"Starting FULL LOK SABHA 2024 SCRAPE ({TOTAL_PAGES} pages)...")
         
-        # Limit to 10 for now for testing
-        limit = 10
-        to_scrape = candidate_urls[:limit]
-        
-        print(f"Starting batch scrape of {len(to_scrape)} candidates...")
-        
-        for index, url in enumerate(to_scrape):
-            try:
-                print(f"\n[{index+1}/{len(to_scrape)}] Processing...")
-                data = scraper.scrape_candidate(url)
-                if data:
-                    scraper.save_to_supabase(data)
-                
-                # Small delay to be polite to the server
-                time.sleep(2)
-            except Exception as e:
-                print(f"Error processing {url}: {e}")
+        for page_num in range(16, TOTAL_PAGES + 1):
+            print(f"\n--- PROCESSING PAGE {page_num}/{TOTAL_PAGES} ---")
+            
+            # Fetch the single page_num
+            summary_page_url = f"{scraper.base_url}index.php?action=summary&sub_action=candidates_analyzed&page={page_num}"
+            scraper.driver.get(summary_page_url)
+            time.sleep(3)
+            soup = BeautifulSoup(scraper.driver.page_source, 'html.parser')
+            
+            links = [l['href'] for l in soup.find_all('a', href=True) if 'candidate.php?candidate_id=' in l['href']]
+            unique_links = []
+            for l in links:
+                q = l.split('candidate.php')[1]
+                full = f"{scraper.base_url}candidate.php{q}"
+                if full not in unique_links: unique_links.append(full)
+            
+            print(f"Found {len(unique_links)} candidates on this page.")
+            
+            for index, url in enumerate(unique_links):
+                try:
+                    if scraper.is_already_scraped(url):
+                        continue
+
+                    print(f"  [{index+1}/{len(unique_links)}] Processing {url}...")
+                    data = scraper.scrape_candidate(url)
+                    if data:
+                        scraper.save_to_supabase(data)
+                    
+                    time.sleep(1) # Be polite
+                except Exception as e:
+                    print(f"  Error processing {url}: {e}")
+                    # Re-initialize driver if it crashes
+                    if "session" in str(e).lower():
+                        scraper.driver = scraper.setup_driver()
                 
     finally:
         scraper.close()
-        print("\n--- Batch scraping complete ---")
+        print("\n--- Full election scraping process ended ---")
