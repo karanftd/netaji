@@ -68,7 +68,10 @@ const Dashboard: React.FC = () => {
       <nav className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10 border-b border-gray-100 dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
-            <div className="flex-shrink-0 flex items-center">
+            <div 
+              className="flex-shrink-0 flex items-center cursor-pointer hover:opacity-80 transition-opacity"
+              onClick={() => setSelectedPolitician(null)}
+            >
               <TrendingUp className="h-6 w-6 text-indigo-600 dark:text-indigo-400 mr-2" />
               <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-indigo-400 dark:to-violet-400">
                 Netaji
