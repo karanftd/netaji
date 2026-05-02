@@ -71,7 +71,7 @@ const Dashboard: React.FC = () => {
             <div className="flex-shrink-0 flex items-center">
               <TrendingUp className="h-6 w-6 text-indigo-600 dark:text-indigo-400 mr-2" />
               <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-indigo-400 dark:to-violet-400">
-                Invest Like Netaji
+                Netaji
               </h1>
             </div>
             <div className="flex items-center space-x-6">
@@ -202,7 +202,16 @@ const Dashboard: React.FC = () => {
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6">Asset Distribution</h3>
                   <AssetChart data={Object.entries(
                     selectedPolitician.investments.reduce((acc, inv) => {
-                      acc[inv.type] = (acc[inv.type] || 0) + inv.amount;
+                      let type = inv.type;
+                      // Shorten long labels for the chart
+                      if (type.includes('Deposits')) type = 'Bank Deposits';
+                      if (type.includes('Bonds') || type.includes('Shares')) type = 'Stocks & Bonds';
+                      if (type.includes('Insurance') || type.includes('LIC')) type = 'Insurance';
+                      if (type.includes('Jewellery')) type = 'Jewellery';
+                      if (type.includes('Motor Vehicles')) type = 'Vehicles';
+                      if (type.includes('Personal loans')) type = 'Loans Given';
+                      
+                      acc[type] = (acc[type] || 0) + inv.amount;
                       return acc;
                     }, {} as Record<string, number>)
                   ).map(([name, value]) => ({ name, value }))} />

@@ -18,7 +18,7 @@ const Login: React.FC = () => {
       <div className="max-w-md w-full space-y-8 bg-white dark:bg-gray-800 p-8 rounded-xl shadow-lg">
         <div className="text-center">
           <h2 className="mt-6 text-3xl font-extrabold text-gray-900 dark:text-white">
-            Invest Like Netaji
+            Netaji
           </h2>
           <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
             Track and analyze wealth declarations of Indian politicians

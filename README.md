@@ -1,6 +1,6 @@
-# Invest Like Netaji 🇮🇳
+# Netaji 🇮🇳
 
-Invest Like Netaji is a full-stack platform designed to provide transparency into the financial portfolios of Indian politicians. By scraping official election affidavits from MyNeta, the platform visualizes asset distribution, investment categories, and liability data in an intuitive dashboard.
+Netaji is a full-stack platform designed to provide transparency into the financial portfolios of Indian politicians. By scraping official election affidavits from MyNeta, the platform visualizes asset distribution, investment categories, and liability data in an intuitive dashboard.
 
 ## 🚀 Features
 

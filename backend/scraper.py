@@ -296,16 +296,27 @@ class MyNetaScraper:
 if __name__ == '__main__':
     scraper = MyNetaScraper()
     try:
-        # --- DEBUGGING SINGLE CANDIDATE ---
-        test_url = "https://myneta.info/LokSabha2024/candidate.php?candidate_id=4427"
-        data = scraper.scrape_candidate(test_url)
-        if data:
-            import json
-            print("\n--- Scraped Data ---")
-            print(json.dumps(data, indent=2))
-            print("--- End Scraped Data ---\n")
-            
-            scraper.save_to_supabase(data)
+        # Fetch candidate URLs from the main list page
+        candidate_urls = scraper.get_all_candidate_urls()
+        
+        # Limit to 10 for now for testing
+        limit = 10
+        to_scrape = candidate_urls[:limit]
+        
+        print(f"Starting batch scrape of {len(to_scrape)} candidates...")
+        
+        for index, url in enumerate(to_scrape):
+            try:
+                print(f"\n[{index+1}/{len(to_scrape)}] Processing...")
+                data = scraper.scrape_candidate(url)
+                if data:
+                    scraper.save_to_supabase(data)
+                
+                # Small delay to be polite to the server
+                time.sleep(2)
+            except Exception as e:
+                print(f"Error processing {url}: {e}")
+                
     finally:
         scraper.close()
-        print("\n--- Scraping complete ---")
+        print("\n--- Batch scraping complete ---")
