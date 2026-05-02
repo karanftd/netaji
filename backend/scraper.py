@@ -44,24 +44,56 @@ class MyNetaScraper:
         """
         Tries to parse company name, quantity, and rate from description.
         Example: "3I Infotech Ltd Q. 200, Rate.40.05"
+        Example: "Reliance Communication 1000 Shares"
         """
+        print(f"  [DEBUG] Parsing stock: {description[:50]}...")
         try:
-            # Regex to find Quantity (Q. or Qty) and Rate
-            q_match = re.search(r'Q(?:ty)?\.?\s*([\d,.]+)', description, re.IGNORECASE)
-            r_match = re.search(r'Rate\.?\s*([\d,.]+)', description, re.IGNORECASE)
+            # Normalize description
+            desc = description.replace(',', '').replace('Rs.', '').replace('Rs', '')
             
-            quantity = float(q_match.group(1).replace(',', '')) if q_match else None
-            rate = float(r_match.group(1).replace(',', '')) if r_match else None
+            # 1. Try to find Quantity (Prefixes and Suffixes)
+            # Match prefixes: Q. 100, Qty 100, Quantity 100
+            q_match = re.search(r'(?:Q(?:ty)?\.?|Quantity)\s*([\d.]+)', desc, re.IGNORECASE)
             
-            # Company name is usually everything before 'Q.'
-            company_name = description
+            # Match suffixes: 1000 Shares, 500 Units, 200 Qty
+            q_suffix_match = re.search(r'([\d.]+)\s*(?:Shares|Units|Qty|Nos)', desc, re.IGNORECASE)
+            
+            # 2. Try to find Rate
+            r_match = re.search(r'(?:Rate\.?|@|at)\s*([\d.]+)', desc, re.IGNORECASE)
+            
+            quantity = None
             if q_match:
-                company_name = description[:q_match.start()].strip()
-            elif r_match:
-                company_name = description[:r_match.start()].strip()
-                
-            # Clean up company name
-            company_name = re.sub(r'^[ivx.]+\s*', '', company_name).strip()
+                quantity = float(q_match.group(1))
+            elif q_suffix_match:
+                quantity = float(q_suffix_match.group(1))
+            
+            rate = float(r_match.group(1)) if r_match else None
+            
+            # 3. Handle Fallbacks
+            matches = re.findall(r'[\d.]+', desc)
+            
+            # If we found no quantity via keywords but have numbers
+            if quantity is None and len(matches) >= 1:
+                # If there are two numbers, it's often Qty and Rate
+                if len(matches) >= 2:
+                    quantity = float(matches[0])
+                    rate = float(matches[1])
+                else:
+                    # Only one number - if it's a large integer, it's likely Quantity
+                    # especially if description contains "Shares" or similar
+                    if any(x in desc.lower() for x in ['share', 'unit', 'qty', 'nos']):
+                        quantity = float(matches[0])
+
+            # Company name extraction: take everything before the first numeric block 
+            # or keywords that start the data part
+            company_name = description
+            split_match = re.search(r'[\d\(]|Q(?:ty)?\.?|Rate\.?|@|at\s+\d', description, re.IGNORECASE)
+            if split_match:
+                company_name = description[:split_match.start()].strip()
+            
+            # Final cleanup of company name
+            company_name = re.sub(r'^[ivx.\s]+', '', company_name).strip()
+            if not company_name: company_name = description
             
             return {
                 'company_name': company_name,
@@ -69,7 +101,8 @@ class MyNetaScraper:
                 'rate': rate,
                 'total_value': total_amount
             }
-        except:
+        except Exception as e:
+            print(f"  [DEBUG] Parsing error: {e}")
             return {
                 'company_name': description,
                 'quantity': None,
@@ -309,7 +342,7 @@ if __name__ == '__main__':
         TOTAL_PAGES = 167
         print(f"Starting FULL LOK SABHA 2024 SCRAPE ({TOTAL_PAGES} pages)...")
         
-        for page_num in range(16, TOTAL_PAGES + 1):
+        for page_num in range(3, TOTAL_PAGES + 1):
             print(f"\n--- PROCESSING PAGE {page_num}/{TOTAL_PAGES} ---")
             
             # Fetch the single page_num
