@@ -31,7 +31,7 @@ const AssetChart: React.FC<AssetChartProps> = ({ data }) => {
             ))}
           </Pie>
           <Tooltip 
-            formatter={(value: number) => `₹${value.toLocaleString('en-IN')}`}
+            formatter={(value: any) => `₹${Number(value).toLocaleString('en-IN')}`}
             contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
           />
           <Legend 

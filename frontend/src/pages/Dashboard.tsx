@@ -6,7 +6,7 @@ import InvestmentsTable from '../components/InvestmentsTable';
 import StocksTable from '../components/StocksTable';
 import AssetChart from '../components/AssetChart';
 import ThemeToggle from '../components/ThemeToggle';
-import { Search, X, Crown, Landmark, ShieldCheck, PieChart as PieChartIcon, LayoutList } from 'lucide-react';
+import { Search, X, Armchair, Landmark, ShieldCheck } from 'lucide-react';
 
 interface Politician {
   id: string;
@@ -168,7 +168,7 @@ const Dashboard: React.FC = () => {
                 <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 p-8">
                   <div className="flex items-center space-x-4 mb-6">
                     <div className="h-16 w-16 bg-indigo-100 dark:bg-indigo-900 rounded-2xl flex items-center justify-center text-indigo-600 dark:text-indigo-400 text-2xl font-bold">
-                      {selectedPolitician.name.charAt(0)}
+                      {selectedPolitician.name?.charAt(0) || '?'}
                     </div>
                     <div>
                       <h2 className="text-2xl font-bold text-gray-900 dark:text-white leading-tight">
@@ -196,7 +196,7 @@ const Dashboard: React.FC = () => {
                       Total Assets
                     </p>
                     <p className="text-4xl font-extrabold text-green-600 dark:text-green-400">
-                      ₹{(selectedPolitician.total_assets / 10000000).toFixed(2)} Cr
+                      ₹{(Number(selectedPolitician.total_assets || 0) / 10000000).toFixed(2)} Cr
                     </p>
                   </div>
                 </div>
@@ -204,8 +204,8 @@ const Dashboard: React.FC = () => {
                 <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 p-8">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6">Asset Distribution</h3>
                   <AssetChart data={Object.entries(
-                    selectedPolitician.investments.reduce((acc, inv) => {
-                      let type = inv.type;
+                    (selectedPolitician.investments || []).reduce((acc, inv) => {
+                      let type = inv.type || 'Other';
                       // Shorten long labels for the chart
                       if (type.includes('Deposits')) type = 'Bank Deposits';
                       if (type.includes('Bonds') || type.includes('Shares')) type = 'Stocks & Bonds';
@@ -214,10 +214,10 @@ const Dashboard: React.FC = () => {
                       if (type.includes('Motor Vehicles')) type = 'Vehicles';
                       if (type.includes('Personal loans')) type = 'Loans Given';
                       
-                      acc[type] = (acc[type] || 0) + inv.amount;
+                      acc[type] = (acc[type] || 0) + Number(inv.amount || 0);
                       return acc;
                     }, {} as Record<string, number>)
-                  ).map(([name, value]) => ({ name, value }))} />
+                  ).map(([name, value]) => ({ name, value: value as number }))} />
                 </div>
               </div>
 
@@ -264,7 +264,7 @@ const Dashboard: React.FC = () => {
 
                   <div className="p-0">
                     {activeTab === 'general' ? (
-                      <InvestmentsTable investments={selectedPolitician.investments} />
+                      <InvestmentsTable investments={selectedPolitician.investments || []} />
                     ) : (
                       <StocksTable stocks={selectedPolitician.stocks || []} />
                     )}
