@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
-import { TrendingUp, Users, PieChart as PieIcon, ArrowLeft, Loader2 } from 'lucide-react';
+import { TrendingUp, Users, PieChart as PieIcon, ArrowLeft, Loader2, BarChart as BarChartIcon } from 'lucide-react';
 import ThemeToggle from '../components/ThemeToggle';
 
 const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
@@ -10,20 +10,23 @@ const Analytics: React.FC = () => {
   const [richest, setRichest] = useState([]);
   const [partyWealth, setPartyWealth] = useState([]);
   const [popularStocks, setPopularStocks] = useState([]);
+  const [partyStocks, setPartyStocks] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchAnalytics = async () => {
       setLoading(true);
       try {
-        const [rRes, pRes, sRes] = await Promise.all([
+        const [rRes, pRes, sRes, psRes] = await Promise.all([
           axios.get('http://localhost:5000/api/analytics/richest'),
           axios.get('http://localhost:5000/api/analytics/party-wealth'),
-          axios.get('http://localhost:5000/api/analytics/popular-stocks')
+          axios.get('http://localhost:5000/api/analytics/popular-stocks'),
+          axios.get('http://localhost:5000/api/analytics/party-stock-stats')
         ]);
         setRichest(rRes.data);
         setPartyWealth(pRes.data);
         setPopularStocks(sRes.data);
+        setPartyStocks(psRes.data);
       } catch (error) {
         console.error("Failed to fetch analytics", error);
       } finally {
@@ -132,11 +135,42 @@ const Analytics: React.FC = () => {
             </div>
           </div>
 
+          {/* Party-wise Stock Holdings */}
+          <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 p-8">
+            <div className="flex items-center space-x-3 mb-8">
+              <BarChartIcon className="h-6 w-6 text-indigo-600" />
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white uppercase tracking-wider">Stocks by Party</h3>
+            </div>
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={partyStocks} layout="vertical" margin={{ left: 40, right: 40 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e5e7eb" opacity={0.5} />
+                  <XAxis type="number" hide />
+                  <YAxis 
+                    dataKey="party" 
+                    type="category" 
+                    width={100} 
+                    tick={{ fontSize: 11 }}
+                  />
+                  <Tooltip 
+                    formatter={(value: any) => [`${value} Holdings`, 'Count']}
+                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
+                  />
+                  <Bar dataKey="count" radius={[0, 4, 4, 0]} name="Holdings">
+                    {partyStocks.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
           {/* Popular Stocks */}
           <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 p-8">
             <div className="flex items-center space-x-3 mb-8">
               <PieIcon className="h-6 w-6 text-amber-600" />
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white uppercase tracking-wider">Most Held Stocks</h3>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white uppercase tracking-wider">Most Common Stocks Between Politicians</h3>
             </div>
             <div className="h-96">
               <ResponsiveContainer width="100%" height="100%">
@@ -147,14 +181,22 @@ const Analytics: React.FC = () => {
                     tick={{ fontSize: 10 }} 
                     angle={-45} 
                     textAnchor="end" 
-                    height={100}
+                    height={120}
                   />
-                  <YAxis tick={{ fontSize: 11 }} label={{ value: 'Holders', angle: -90, position: 'insideLeft' }} />
+                  <YAxis tick={{ fontSize: 11 }} label={{ value: 'No. of Politicians', angle: -90, position: 'insideLeft' }} />
                   <Tooltip 
                     cursor={{ fill: 'transparent' }}
                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
+                    formatter={(value: any, name: string, props: any) => {
+                      if (name === "No. of Politicians") return [value, name];
+                      return [`₹${(props.payload.total_value / 10000000).toFixed(2)} Cr`, "Total Aggregated Value"];
+                    }}
                   />
-                  <Bar dataKey="count" name="No. of Holders" fill="#4f46e5" radius={[4, 4, 0, 0]} barSize={40} />
+                  <Bar dataKey="count" name="No. of Politicians" fill="#4f46e5" radius={[4, 4, 0, 0]} barSize={40}>
+                    {popularStocks.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>

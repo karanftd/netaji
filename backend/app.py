@@ -87,16 +87,57 @@ def get_party_wealth():
 @app.route('/api/analytics/popular-stocks', methods=['GET'])
 def get_popular_stocks():
     try:
-        # Aggregate stocks by company name
-        res = supabase.table('stocks').select('company_name').execute()
-        stock_counts = {}
+        # Fetch company name, total value, and politician id
+        res = supabase.table('stocks').select('company_name, total_value, politician_id').execute()
+        
+        stock_stats = {}
         for s in res.data:
             name = s['company_name']
-            stock_counts[name] = stock_counts.get(name, 0) + 1
+            if name not in stock_stats:
+                stock_stats[name] = {
+                    "company": name,
+                    "count": 0,
+                    "total_value": 0,
+                    "politician_ids": set()
+                }
             
-        sorted_stocks = sorted([{"company": k, "count": v} for k, v in stock_counts.items()], key=lambda x: x['count'], reverse=True)
-        return jsonify(sorted_stocks[:15])
+            stock_stats[name]["total_value"] += float(s['total_value'] or 0)
+            stock_stats[name]["politician_ids"].add(s['politician_id'])
+            
+        # Transform for JSON and count unique politicians
+        result = []
+        for name, stats in stock_stats.items():
+            result.append({
+                "company": name,
+                "count": len(stats["politician_ids"]),
+                "total_value": stats["total_value"]
+            })
+            
+        # Sort by unique holder count primarily, then total value
+        sorted_stocks = sorted(result, key=lambda x: (x['count'], x['total_value']), reverse=True)
+        
+        return jsonify(sorted_stocks[:20])
     except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/analytics/party-stock-stats', methods=['GET'])
+def get_party_stock_stats():
+    try:
+        # Join stocks with politicians to get party info
+        # query format: table.select('*, other_table(column)')
+        res = supabase.table('stocks').select('id, politician_id, politicians(party)').execute()
+        
+        party_counts = {}
+        for item in res.data:
+            # item['politicians'] is a dict because of the join
+            party = item.get('politicians', {}).get('party') or 'Unknown'
+            party_counts[party] = party_counts.get(party, 0) + 1
+            
+        # Sort by count
+        sorted_stats = sorted([{"party": k, "count": v} for k, v in party_counts.items()], key=lambda x: x['count'], reverse=True)
+        return jsonify(sorted_stats)
+    except Exception as e:
+        print(f"Error in party-stock-stats: {e}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':

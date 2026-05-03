@@ -45,54 +45,59 @@ class MyNetaScraper:
         Tries to parse company name, quantity, and rate from description.
         Example: "3I Infotech Ltd Q. 200, Rate.40.05"
         Example: "Reliance Communication 1000 Shares"
+        Example: "State Bank of India Units 1000"
         """
         print(f"  [DEBUG] Parsing stock: {description[:50]}...")
         try:
-            # Normalize description
+            # Normalize description for value extraction
             desc = description.replace(',', '').replace('Rs.', '').replace('Rs', '')
             
             # 1. Try to find Quantity (Prefixes and Suffixes)
-            # Match prefixes: Q. 100, Qty 100, Quantity 100
-            q_match = re.search(r'(?:Q(?:ty)?\.?|Quantity)\s*([\d.]+)', desc, re.IGNORECASE)
-            
-            # Match suffixes: 1000 Shares, 500 Units, 200 Qty
-            q_suffix_match = re.search(r'([\d.]+)\s*(?:Shares|Units|Qty|Nos)', desc, re.IGNORECASE)
+            q_match = re.search(r'(?:Q(?:ty)?\.?|Quantity|Units?|Shares?)\s*([\d.]+)', desc, re.IGNORECASE)
+            q_suffix_match = re.search(r'([\d.]+)\s*(?:Shares?|Units?|Qty|Nos)', desc, re.IGNORECASE)
             
             # 2. Try to find Rate
             r_match = re.search(r'(?:Rate\.?|@|at)\s*([\d.]+)', desc, re.IGNORECASE)
             
             quantity = None
+            q_str_to_remove = ""
             if q_match:
                 quantity = float(q_match.group(1))
+                q_str_to_remove = q_match.group(0)
             elif q_suffix_match:
                 quantity = float(q_suffix_match.group(1))
+                q_str_to_remove = q_suffix_match.group(0)
             
             rate = float(r_match.group(1)) if r_match else None
+            r_str_to_remove = r_match.group(0) if r_match else ""
             
             # 3. Handle Fallbacks
             matches = re.findall(r'[\d.]+', desc)
-            
-            # If we found no quantity via keywords but have numbers
             if quantity is None and len(matches) >= 1:
-                # If there are two numbers, it's often Qty and Rate
                 if len(matches) >= 2:
                     quantity = float(matches[0])
                     rate = float(matches[1])
+                    q_str_to_remove = matches[0]
+                    r_str_to_remove = matches[1]
                 else:
-                    # Only one number - if it's a large integer, it's likely Quantity
-                    # especially if description contains "Shares" or similar
                     if any(x in desc.lower() for x in ['share', 'unit', 'qty', 'nos']):
                         quantity = float(matches[0])
+                        q_str_to_remove = matches[0]
 
-            # Company name extraction: take everything before the first numeric block 
-            # or keywords that start the data part
+            # Company name extraction: Remove the parts we identified as data
             company_name = description
-            split_match = re.search(r'[\d\(]|Q(?:ty)?\.?|Rate\.?|@|at\s+\d', description, re.IGNORECASE)
-            if split_match:
-                company_name = description[:split_match.start()].strip()
+            if q_str_to_remove:
+                # Use escaped regex to remove the exact string
+                company_name = re.sub(re.escape(q_str_to_remove), '', company_name, flags=re.IGNORECASE)
+            if r_str_to_remove:
+                company_name = re.sub(re.escape(r_str_to_remove), '', company_name, flags=re.IGNORECASE)
             
-            # Final cleanup of company name
+            # Remove leftovers like "Rate", "Qty", "Units", "@"
+            company_name = re.sub(r'\b(?:Q(?:ty)?\.?|Quantity|Rate\.?|Units?|Shares?|Nos\.?|at|@)\b', '', company_name, flags=re.IGNORECASE)
+            # Remove trailing/leading punctuation and whitespace
+            company_name = company_name.replace(',', '').replace('()', '').strip()
             company_name = re.sub(r'^[ivx.\s]+', '', company_name).strip()
+            
             if not company_name: company_name = description
             
             return {
@@ -342,24 +347,42 @@ if __name__ == '__main__':
         TOTAL_PAGES = 167
         print(f"Starting FULL LOK SABHA 2024 SCRAPE ({TOTAL_PAGES} pages)...")
         
-        for page_num in range(3, TOTAL_PAGES + 1):
+        # Resume from Page 17
+        for page_num in range(17, TOTAL_PAGES + 1):
             print(f"\n--- PROCESSING PAGE {page_num}/{TOTAL_PAGES} ---")
             
-            # Fetch the single page_num
             summary_page_url = f"{scraper.base_url}index.php?action=summary&sub_action=candidates_analyzed&page={page_num}"
-            scraper.driver.get(summary_page_url)
-            time.sleep(3)
-            soup = BeautifulSoup(scraper.driver.page_source, 'html.parser')
             
-            links = [l['href'] for l in soup.find_all('a', href=True) if 'candidate.php?candidate_id=' in l['href']]
-            unique_links = []
-            for l in links:
-                q = l.split('candidate.php')[1]
-                full = f"{scraper.base_url}candidate.php{q}"
-                if full not in unique_links: unique_links.append(full)
+            # Retry logic for the summary page itself
+            for attempt in range(3):
+                try:
+                    scraper.driver.get(summary_page_url)
+                    time.sleep(5) # Increased wait time
+                    soup = BeautifulSoup(scraper.driver.page_source, 'html.parser')
+                    
+                    links = [l['href'] for l in soup.find_all('a', href=True) if 'candidate.php?candidate_id=' in l['href']]
+                    unique_links = []
+                    for l in links:
+                        q = l.split('candidate.php')[1]
+                        full = f"{scraper.base_url}candidate.php{q}"
+                        if full not in unique_links: unique_links.append(full)
+                    
+                    if len(unique_links) > 0:
+                        break
+                    else:
+                        print(f"  Attempt {attempt+1}: No candidates found, retrying...")
+                        time.sleep(5)
+                except Exception as e:
+                    print(f"  Attempt {attempt+1} failed: {e}")
+                    scraper.driver.quit()
+                    scraper.driver = scraper.setup_driver()
             
             print(f"Found {len(unique_links)} candidates on this page.")
             
+            if len(unique_links) == 0:
+                print("  Skipping page due to no candidates found.")
+                continue
+
             for index, url in enumerate(unique_links):
                 try:
                     if scraper.is_already_scraped(url):
@@ -374,7 +397,8 @@ if __name__ == '__main__':
                 except Exception as e:
                     print(f"  Error processing {url}: {e}")
                     # Re-initialize driver if it crashes
-                    if "session" in str(e).lower():
+                    if "session" in str(e).lower() or "target window already closed" in str(e).lower():
+                        scraper.driver.quit()
                         scraper.driver = scraper.setup_driver()
                 
     finally:
