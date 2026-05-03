@@ -20,6 +20,14 @@ interface Politician {
   stocks?: any[];
 }
 
+interface ScrapingStatus {
+  total_pages: number;
+  current_page: number;
+  total_politicians: number;
+  processed_politicians: number;
+  status: 'running' | 'idle' | 'error';
+}
+
 const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
   const [politicians, setPoliticians] = useState<Politician[]>([]);
@@ -28,10 +36,25 @@ const Dashboard: React.FC = () => {
   const [selectedPolitician, setSelectedPolitician] = useState<Politician | null>(null);
   const [fetchingDetails, setFetchingDetails] = useState(false);
   const [activeTab, setActiveTab] = useState<'general' | 'stocks'>('stocks');
+  const [scrapingStatus, setScrapingStatus] = useState<ScrapingStatus | null>(null);
 
   useEffect(() => {
     fetchPoliticians();
+    fetchScrapingStatus();
+    
+    // Poll status every 30 seconds if it's running
+    const interval = setInterval(fetchScrapingStatus, 30000);
+    return () => clearInterval(interval);
   }, []);
+
+  const fetchScrapingStatus = async () => {
+    try {
+      const res = await axios.get('http://localhost:5000/api/scraping-status');
+      setScrapingStatus(res.data);
+    } catch (error) {
+      console.error("Failed to fetch scraping status", error);
+    }
+  };
 
   const fetchPoliticians = async (query = '') => {
     setLoading(true);
@@ -109,6 +132,35 @@ const Dashboard: React.FC = () => {
       </nav>
 
       <main className="max-w-7xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
+        {/* Scraping Progress Bar */}
+        {scrapingStatus && (
+          <div className="mb-10 bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center space-x-3">
+                <div className={`h-2.5 w-2.5 rounded-full ${scrapingStatus.status === 'running' ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
+                <h3 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-widest">
+                  Election Data Ingestion
+                </h3>
+              </div>
+              <span className="text-xs font-bold text-gray-500 dark:text-gray-400">
+                {scrapingStatus.processed_politicians} / {scrapingStatus.total_politicians} Records
+              </span>
+            </div>
+            
+            <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-3 mb-2 overflow-hidden">
+              <div 
+                className="bg-gradient-to-r from-indigo-500 to-emerald-500 h-full transition-all duration-1000 ease-out rounded-full"
+                style={{ width: `${Math.min(100, (scrapingStatus.processed_politicians / scrapingStatus.total_politicians) * 100)}%` }}
+              />
+            </div>
+            
+            <div className="flex justify-between text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+              <span>Progress: {((scrapingStatus.processed_politicians / scrapingStatus.total_politicians) * 100).toFixed(1)}%</span>
+              <span>Page {scrapingStatus.current_page} of {scrapingStatus.total_pages}</span>
+            </div>
+          </div>
+        )}
+
         {fetchingDetails ? (
           <div className="flex flex-col justify-center items-center h-96 space-y-4">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>

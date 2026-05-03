@@ -45,3 +45,19 @@ CREATE INDEX IF NOT EXISTS idx_politicians_myneta_id ON politicians(myneta_id);
 CREATE INDEX IF NOT EXISTS idx_politicians_name ON politicians(name);
 CREATE INDEX IF NOT EXISTS idx_investments_politician_id ON investments(politician_id);
 CREATE INDEX IF NOT EXISTS idx_stocks_politician_id ON stocks(politician_id);
+
+-- Create a table for tracking scraping progress
+CREATE TABLE IF NOT EXISTS scraping_status (
+    id TEXT PRIMARY KEY,
+    total_pages INTEGER DEFAULT 167,
+    current_page INTEGER DEFAULT 1,
+    total_politicians INTEGER DEFAULT 8338,
+    processed_politicians INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'idle', -- 'running', 'paused', 'idle', 'error'
+    last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Initialize the row
+INSERT INTO scraping_status (id, total_pages, total_politicians, status)
+VALUES ('loksabha_2024', 167, 8338, 'idle')
+ON CONFLICT (id) DO NOTHING;

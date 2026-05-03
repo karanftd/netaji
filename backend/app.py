@@ -124,20 +124,24 @@ def get_popular_stocks():
 def get_party_stock_stats():
     try:
         # Join stocks with politicians to get party info
-        # query format: table.select('*, other_table(column)')
         res = supabase.table('stocks').select('id, politician_id, politicians(party)').execute()
         
         party_counts = {}
         for item in res.data:
-            # item['politicians'] is a dict because of the join
             party = item.get('politicians', {}).get('party') or 'Unknown'
             party_counts[party] = party_counts.get(party, 0) + 1
             
-        # Sort by count
         sorted_stats = sorted([{"party": k, "count": v} for k, v in party_counts.items()], key=lambda x: x['count'], reverse=True)
         return jsonify(sorted_stats)
     except Exception as e:
-        print(f"Error in party-stock-stats: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/scraping-status', methods=['GET'])
+def get_scraping_status():
+    try:
+        res = supabase.table('scraping_status').select('*').eq('id', 'loksabha_2024').single().execute()
+        return jsonify(res.data)
+    except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':

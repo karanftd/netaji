@@ -160,6 +160,7 @@ class MyNetaScraper:
 
     def scrape_candidate(self, url):
         print(f"Scraping {url}...")
+        self.update_status() # Refresh count frequently
         self.driver.get(url)
         try:
             WebDriverWait(self.driver, 10).until(
@@ -336,7 +337,42 @@ class MyNetaScraper:
         except Exception as e:
             print(f"Supabase error for {data.get('name', 'Unknown')}: {e}")
 
+    def update_status(self, page=None, status='running'):
+        try:
+            update_data = {
+                'id': 'loksabha_2024',
+                'status': status,
+                'last_updated': 'now()',
+                'total_pages': 167,
+                'total_politicians': 8338
+            }
+            
+            # If page is not provided, try to preserve the existing one from the DB
+            if not page:
+                try:
+                    curr = self.supabase.table('scraping_status').select('current_page').eq('id', 'loksabha_2024').single().execute()
+                    if curr.data:
+                        update_data['current_page'] = curr.data.get('current_page')
+                except:
+                    pass
+            else:
+                update_data['current_page'] = page
+                
+            # Count total politicians in DB to get processed count
+            try:
+                res = self.supabase.table('politicians').select('id', count='exact').execute()
+                update_data['processed_politicians'] = res.count or 0
+            except:
+                pass
+                
+            # Use upsert to ensure the row exists
+            self.supabase.table('scraping_status').upsert(update_data).execute()
+            print(f"  [STATUS] Page: {update_data.get('current_page', 'N/A')}, Status: {status}")
+        except Exception as e:
+            print(f"Error updating status: {e}")
+
     def close(self):
+        self.update_status(status='idle')
         self.driver.quit()
 
 
@@ -345,22 +381,37 @@ if __name__ == '__main__':
     try:
         # 167 total pages for Lok Sabha 2024
         TOTAL_PAGES = 167
-        print(f"Starting FULL LOK SABHA 2024 SCRAPE ({TOTAL_PAGES} pages)...")
         
-        # Resume from Page 17
-        for page_num in range(17, TOTAL_PAGES + 1):
+        # --- AUTO-RESUME LOGIC ---
+        start_page = 1
+        try:
+            status_res = scraper.supabase.table('scraping_status').select('current_page').eq('id', 'loksabha_2024').single().execute()
+            if status_res.data and status_res.data.get('current_page'):
+                start_page = status_res.data['current_page']
+                print(f"Resuming from last known page: {start_page}")
+        except Exception as e:
+            print(f"Could not fetch resume point, starting from 1: {e}")
+
+        print(f"Starting FULL LOK SABHA 2024 SCRAPE ({TOTAL_PAGES} pages)...")
+        scraper.update_status(status='running')
+        
+        for page_num in range(start_page, TOTAL_PAGES + 1):
             print(f"\n--- PROCESSING PAGE {page_num}/{TOTAL_PAGES} ---")
             
-            summary_page_url = f"{scraper.base_url}index.php?action=summary&sub_action=candidates_analyzed&page={page_num}"
+            # Retry entire page on major network failure
+            max_page_retries = 5
+            unique_links = []
             
-            # Retry logic for the summary page itself
-            for attempt in range(3):
+            for page_attempt in range(max_page_retries):
                 try:
+                    summary_page_url = f"{scraper.base_url}index.php?action=summary&sub_action=candidates_analyzed&page={page_num}"
                     scraper.driver.get(summary_page_url)
-                    time.sleep(5) # Increased wait time
-                    soup = BeautifulSoup(scraper.driver.page_source, 'html.parser')
+                    time.sleep(5)
+                    scraper.update_status(page=page_num)
                     
+                    soup = BeautifulSoup(scraper.driver.page_source, 'html.parser')
                     links = [l['href'] for l in soup.find_all('a', href=True) if 'candidate.php?candidate_id=' in l['href']]
+                    
                     unique_links = []
                     for l in links:
                         q = l.split('candidate.php')[1]
@@ -369,37 +420,47 @@ if __name__ == '__main__':
                     
                     if len(unique_links) > 0:
                         break
-                    else:
-                        print(f"  Attempt {attempt+1}: No candidates found, retrying...")
-                        time.sleep(5)
+                    print(f"  [PAGE RETRY] No candidates found on page {page_num}, attempt {page_attempt+1}...")
+                    time.sleep(10)
                 except Exception as e:
-                    print(f"  Attempt {attempt+1} failed: {e}")
+                    print(f"  [NETWORK ERROR] Failed to load page {page_num}: {e}")
                     scraper.driver.quit()
+                    time.sleep(20) # Cool down
                     scraper.driver = scraper.setup_driver()
             
-            print(f"Found {len(unique_links)} candidates on this page.")
-            
-            if len(unique_links) == 0:
-                print("  Skipping page due to no candidates found.")
+            if not unique_links:
+                print(f"CRITICAL: Failed to load page {page_num} after {max_page_retries} attempts. Skipping.")
                 continue
 
+            print(f"Found {len(unique_links)} candidates on this page.")
+            
             for index, url in enumerate(unique_links):
-                try:
-                    if scraper.is_already_scraped(url):
-                        continue
+                # Inner loop error handling (per candidate)
+                candidate_retries = 2
+                for cand_attempt in range(candidate_retries):
+                    try:
+                        if scraper.is_already_scraped(url):
+                            scraper.update_status() # Keep progress bar moving even on skip
+                            break # Success (already done)
 
-                    print(f"  [{index+1}/{len(unique_links)}] Processing {url}...")
-                    data = scraper.scrape_candidate(url)
-                    if data:
-                        scraper.save_to_supabase(data)
-                    
-                    time.sleep(1) # Be polite
-                except Exception as e:
-                    print(f"  Error processing {url}: {e}")
-                    # Re-initialize driver if it crashes
-                    if "session" in str(e).lower() or "target window already closed" in str(e).lower():
+                        print(f"  [{index+1}/{len(unique_links)}] Processing {url}...")
+                        data = scraper.scrape_candidate(url)
+                        if data:
+                            scraper.save_to_supabase(data)
+                            scraper.update_status() # Update record count
+                        break # Success
+                    except Exception as e:
+                        print(f"  [CANDIDATE ERROR] attempt {cand_attempt+1} for {url}: {e}")
+                        # Network recovery
                         scraper.driver.quit()
+                        time.sleep(10)
                         scraper.driver = scraper.setup_driver()
+                        if cand_attempt == candidate_retries - 1:
+                            print(f"  Failed to scrape {url} after {candidate_retries} attempts.")
+                
+                time.sleep(1) # Base delay
+        
+        scraper.update_status(status='idle')
                 
     finally:
         scraper.close()
